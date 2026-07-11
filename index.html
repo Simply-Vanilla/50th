@@ -116,35 +116,33 @@ header p{
 
 .photos{
 
-    display:grid;
-    grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
-    gap:22px;
+    display:flex;
+    flex-wrap:wrap;
+    align-items:flex-start;
+    gap:16px;
 }
 
 .photo{
 
+    position:relative;
     overflow:hidden;
     border-radius:8px;
-    background:white;
-
-    box-shadow:0 10px 25px rgba(0,0,0,.08);
-
-    transition:.35s;
-}
-
-.photo:hover{
-
-    transform:translateY(-5px);
-    box-shadow:0 18px 35px rgba(0,0,0,.18);
+    line-height:0;
 }
 
 .photo img{
 
     display:block;
-    width:100%;
     height:var(--photo-height);
-    object-fit:cover;
-    transition:height .25s ease;
+    width:auto;
+    max-width:100%;
+    border-radius:8px;
+    transition:height .25s ease, transform .35s ease;
+}
+
+.photo:hover img{
+
+    transform:scale(1.03);
 }
 
 .height-control{
@@ -179,9 +177,26 @@ header p{
 
 .photo .caption{
 
-    padding:14px 18px;
-    font-size:14px;
-    color:#555;
+    position:absolute;
+    left:0;
+    right:0;
+    bottom:0;
+
+    padding:14px 16px 12px;
+    font-size:13px;
+    line-height:1.4;
+    color:#fff;
+
+    background:linear-gradient(to top, rgba(0,0,0,.65), rgba(0,0,0,0));
+
+    opacity:0;
+    transition:opacity .25s ease;
+    pointer-events:none;
+}
+
+.photo:hover .caption{
+
+    opacity:1;
 }
 
 footer{
@@ -239,8 +254,8 @@ header h1{
 <body>
 
 <div class="height-control">
-<label for="heightSlider">Photo Height</label>
-<input type="range" id="heightSlider" min="150" max="600" step="10" value="300">
+<label for="heightSlider">Height</label>
+<input type="range" id="heightSlider" min="60" max="600" step="10" value="300">
 </div>
 
 <header>
