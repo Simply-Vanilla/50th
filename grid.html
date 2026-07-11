@@ -163,7 +163,7 @@ header p{
 
     position:relative;
     width:100%;
-    aspect-ratio:4/5;
+    aspect-ratio:1/1;
     border-radius:6px;
     overflow:hidden;
 
@@ -452,24 +452,24 @@ function checkImage(src){
     });
 }
 
-const cropTargets = [];
+let cropTargets = [];
 
 async function buildGrid(){
     const grid = document.getElementById('yearGrid');
+    grid.innerHTML = '';
+    cropTargets = [];
 
-    const [years, crops] = await Promise.all([
-        (async () => {
-            const yearPromises = [];
-            for(let year = START_YEAR; year <= END_YEAR; year++){
-                const src = `photos/${year}-1.jpg`;
-                yearPromises.push(checkImage(src).then(ok => ({ year, src, ok })));
-            }
-            return Promise.all(yearPromises);
-        })(),
-        CropTools.loadCrops()
-    ]);
+    const crops = await CropTools.loadCrops();
 
-    years.forEach(({ year, src, ok }) => {
+    const yearPromises = [];
+    for(let year = START_YEAR; year <= END_YEAR; year++){
+        const num = CropTools.getYearPhotoNumber(crops, year);
+        const src = `photos/${year}-${num}.jpg`;
+        yearPromises.push(checkImage(src).then(ok => ({ year, src, ok, num })));
+    }
+    const years = await Promise.all(yearPromises);
+
+    years.forEach(({ year, src, ok, num }) => {
         const cell = document.createElement('div');
         cell.className = 'year-cell';
 
@@ -486,13 +486,13 @@ async function buildGrid(){
 
         if(ok){
             box.classList.add('has-photo');
-            const key = `${year}-1`;
+            const key = `${year}-${num}`;
             img = document.createElement('img');
             img.src = src;
             img.loading = 'lazy';
             img.alt = `${year}`;
             img.addEventListener('click', () => {
-                if(CropTools.isEditMode()) CropTools.openEditor(key, src);
+                if(CropTools.isEditMode()) CropTools.openEditor(key, src, year);
                 else openLightbox(src, `${year}`);
             });
             box.appendChild(img);
@@ -523,7 +523,7 @@ function reapplyCrops(){
 }
 
 CropTools.init();
-CropTools.onSaved(() => {});
+CropTools.onSaved(() => { buildGrid(); });
 
 buildGrid();
 

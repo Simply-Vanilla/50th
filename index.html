@@ -631,6 +631,8 @@ async function loadCaptions(){
 
 async function buildTimeline(){
     const timeline = document.getElementById('timeline');
+    timeline.innerHTML = '';
+    yearBlocks.length = 0;
     const [captions, crops] = await Promise.all([loadCaptions(), CropTools.loadCrops()]);
 
     const yearPromises = [];
@@ -680,7 +682,7 @@ async function buildTimeline(){
             img.loading = 'lazy';
             img.alt = captions[photo.key] || `${year} photo`;
             img.addEventListener('click', () => {
-                if(CropTools.isEditMode()) CropTools.openEditor(photo.key, photo.src);
+                if(CropTools.isEditMode()) CropTools.openEditor(photo.key, photo.src, year);
                 else openLightbox(photo.src, img.alt, captions[photo.key]);
             });
             card.appendChild(img);
@@ -721,7 +723,9 @@ if(savedHeight) heightSlider.value = savedHeight;
 updateHeaderHeightVar();
 
 CropTools.init();
-CropTools.onSaved(() => {});
+CropTools.onSaved(() => {
+    buildTimeline().then(() => requestAnimationFrame(layoutAll));
+});
 
 buildTimeline().then(() => {
     requestAnimationFrame(layoutAll);
