@@ -62,6 +62,15 @@ header p{
     margin:auto;
 }
 
+.empty-state{
+
+    text-align:center;
+    padding:60px 20px;
+    color:#999;
+    font-family:"Cormorant Garamond",serif;
+    font-size:22px;
+}
+
 .year{
 
     display:grid;
@@ -133,6 +142,13 @@ header p{
     object-fit:cover;
 }
 
+.photo .caption{
+
+    padding:14px 18px;
+    font-size:14px;
+    color:#555;
+}
+
 footer{
 
     text-align:center;
@@ -185,83 +201,161 @@ header h1{
 
 </header>
 
-<div class="timeline">
-
-<!-- ====================== -->
-
-<section class="year">
-
-<div class="year-label">
-
-<div class="year-number">1976</div>
-
-<div class="year-sub">The Beginning</div>
-
-</div>
-
-<div class="photos">
-
-<div class="photo">
-<img src="photos/1976-1.jpg">
-</div>
-
-</div>
-
-</section>
-
-<!-- ====================== -->
-
-<section class="year">
-
-<div class="year-label">
-
-<div class="year-number">1977</div>
-
-</div>
-
-<div class="photos">
-
-<div class="photo">
-<img src="photos/1977-1.jpg">
-</div>
-
-<div class="photo">
-<img src="photos/1977-2.jpg">
-</div>
-
-</div>
-
-</section>
-
-<!-- ====================== -->
-
-<section class="year">
-
-<div class="year-label">
-
-<div class="year-number">1978</div>
-
-</div>
-
-<div class="photos">
-
-<div class="photo">
-<img src="photos/1978-1.jpg">
-</div>
-
-</div>
-
-</section>
-
-<!-- Continue through 2026 -->
-
-</div>
+<div class="timeline" id="timeline"></div>
 
 <footer>
 
 “The days are long, but the years are short.”
 
 </footer>
+
+<script>
+
+const START_YEAR = 1976;
+const END_YEAR = 2026;
+const MAX_PHOTOS_PER_YEAR = 40;
+
+function loadImage(src){
+    return new Promise(resolve => {
+        const img = new Image();
+        img.onload = () => resolve(true);
+        img.onerror = () => resolve(false);
+        img.src = src;
+    });
+}
+
+async function findPhotosForYear(year){
+    const photos = [];
+    for(let n = 1; n <= MAX_PHOTOS_PER_YEAR; n++){
+        const src = `photos/${year}-${n}.jpg`;
+        const ok = await loadImage(src);
+        if(!ok) break;
+        photos.push({ src, key: `${year}-${n}` });
+    }
+    return photos;
+}
+
+function parseCSV(text){
+    const rows = [];
+    let row = [], field = '', inQuotes = false;
+    for(let i = 0; i < text.length; i++){
+        const c = text[i];
+        if(inQuotes){
+            if(c === '"'){
+                if(text[i+1] === '"'){ field += '"'; i++; }
+                else inQuotes = false;
+            } else field += c;
+        } else {
+            if(c === '"') inQuotes = true;
+            else if(c === ',') { row.push(field); field = ''; }
+            else if(c === '\n' || c === '\r'){
+                if(c === '\r' && text[i+1] === '\n') i++;
+                row.push(field); field = '';
+                if(row.length > 1 || row[0] !== '') rows.push(row);
+                row = [];
+            } else field += c;
+        }
+    }
+    if(field !== '' || row.length){ row.push(field); rows.push(row); }
+    return rows;
+}
+
+async function loadCaptions(){
+    const map = {};
+    try {
+        const res = await fetch('captions.csv');
+        if(!res.ok) return map;
+        const text = await res.text();
+        const rows = parseCSV(text);
+        for(const row of rows){
+            if(row.length < 2) continue;
+            const key = (row[0] || '').trim();
+            const caption = (row[1] || '').trim();
+            if(!key || key.toLowerCase() === 'key') continue;
+            map[key] = caption;
+        }
+    } catch(e){
+        console.warn('Could not load captions.csv', e);
+    }
+    return map;
+}
+
+async function buildTimeline(){
+    const timeline = document.getElementById('timeline');
+    const captions = await loadCaptions();
+
+    const yearPromises = [];
+    for(let year = START_YEAR; year <= END_YEAR; year++){
+        yearPromises.push(findPhotosForYear(year).then(photos => ({ year, photos })));
+    }
+    const years = await Promise.all(yearPromises);
+
+    let rendered = 0;
+
+    for(const { year, photos } of years){
+        if(photos.length === 0) continue;
+        rendered++;
+
+        const section = document.createElement('section');
+        section.className = 'year';
+
+        const label = document.createElement('div');
+        label.className = 'year-label';
+
+        const num = document.createElement('div');
+        num.className = 'year-number';
+        num.textContent = year;
+        label.appendChild(num);
+
+        const sub = captions[String(year)];
+        if(sub){
+            const subEl = document.createElement('div');
+            subEl.className = 'year-sub';
+            subEl.textContent = sub;
+            label.appendChild(subEl);
+        }
+
+        section.appendChild(label);
+
+        const grid = document.createElement('div');
+        grid.className = 'photos';
+
+        for(const photo of photos){
+            const card = document.createElement('div');
+            card.className = 'photo';
+
+            const img = document.createElement('img');
+            img.src = photo.src;
+            img.loading = 'lazy';
+            img.alt = captions[photo.key] || `${year} photo`;
+            card.appendChild(img);
+
+            const cap = captions[photo.key];
+            if(cap){
+                const capEl = document.createElement('div');
+                capEl.className = 'caption';
+                capEl.textContent = cap;
+                card.appendChild(capEl);
+            }
+
+            grid.appendChild(card);
+        }
+
+        section.appendChild(grid);
+        timeline.appendChild(section);
+    }
+
+    if(rendered === 0){
+        const empty = document.createElement('div');
+        empty.className = 'empty-state';
+        empty.textContent = 'Photos will appear here as they’re added to the photos/ folder.';
+        timeline.appendChild(empty);
+    }
+}
+
+buildTimeline();
+
+</script>
 
 </body>
 </html>
