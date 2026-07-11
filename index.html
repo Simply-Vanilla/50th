@@ -6,6 +6,16 @@
 
 <title>Carl Wooldridge | 50 Years</title>
 
+<script>
+(function(){
+    try {
+        if(localStorage.getItem('theme') === 'dark'){
+            document.documentElement.setAttribute('data-theme', 'dark');
+        }
+    } catch(e){}
+})();
+</script>
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
@@ -21,14 +31,36 @@
 
 :root{
     --header-height:320px;
+
+    --bg:#f8f6f3;
+    --text:#222;
+    --heading:#222;
+    --muted:#777;
+    --muted2:#888;
+    --border:#ddd;
+    --control-bg:rgba(255,255,255,.85);
+    --control-text:#888;
+}
+
+[data-theme="dark"]{
+    --bg:#16161a;
+    --text:#e6e4e0;
+    --heading:#f2f0ec;
+    --muted:#9a9a9a;
+    --muted2:#8a8a8a;
+    --border:#333;
+    --control-bg:rgba(35,35,40,.85);
+    --control-text:#ccc;
 }
 
 body{
 
-    background:#f8f6f3;
-    color:#222;
+    background:var(--bg);
+    color:var(--text);
     font-family:Inter,sans-serif;
     line-height:1.6;
+
+    transition:background-color .3s ease, color .3s ease;
 }
 
 header{
@@ -37,10 +69,12 @@ header{
     top:0;
     z-index:50;
 
-    background:#f8f6f3;
+    background:var(--bg);
 
     text-align:center;
     padding:80px 20px 100px;
+
+    transition:background-color .3s ease;
 }
 
 header h1{
@@ -49,6 +83,7 @@ header h1{
     font-size:68px;
     font-weight:400;
     letter-spacing:6px;
+    color:var(--heading);
 }
 
 header h2{
@@ -56,14 +91,14 @@ header h2{
     margin-top:18px;
     font-size:20px;
     letter-spacing:5px;
-    color:#666;
+    color:var(--muted);
     font-weight:300;
 }
 
 header p{
 
     margin-top:30px;
-    color:#777;
+    color:var(--muted);
 }
 
 .timeline{
@@ -76,7 +111,7 @@ header p{
 
     text-align:center;
     padding:60px 20px;
-    color:#999;
+    color:var(--muted2);
     font-family:"Cormorant Garamond",serif;
     font-size:22px;
 }
@@ -89,7 +124,7 @@ header p{
 
     padding:90px 0;
 
-    border-top:1px solid #ddd;
+    border-top:1px solid var(--border);
 }
 
 .year:first-child{
@@ -114,7 +149,7 @@ header p{
 .year-sub{
 
     margin-top:8px;
-    color:#888;
+    color:var(--muted2);
     letter-spacing:2px;
     font-size:13px;
     text-transform:uppercase;
@@ -142,6 +177,7 @@ header p{
     width:auto;
     max-width:100%;
     border-radius:8px;
+    cursor:pointer;
     transition:height .2s ease, transform .35s ease;
 }
 
@@ -164,20 +200,54 @@ header p{
     padding:10px 18px;
     border-radius:30px;
 
-    background:rgba(255,255,255,.85);
+    background:var(--control-bg);
     backdrop-filter:blur(6px);
     box-shadow:0 6px 20px rgba(0,0,0,.08);
 
     font-size:11px;
     letter-spacing:2px;
     text-transform:uppercase;
-    color:#888;
+    color:var(--control-text);
+
+    transition:background-color .3s ease, color .3s ease, opacity .2s ease;
 }
 
 .height-control input[type=range]{
 
     width:110px;
-    accent-color:#222;
+    accent-color:var(--text);
+}
+
+.theme-toggle{
+
+    position:fixed;
+    top:24px;
+    left:24px;
+    z-index:100;
+
+    width:44px;
+    height:44px;
+    border:none;
+    border-radius:50%;
+
+    display:flex;
+    align-items:center;
+    justify-content:center;
+
+    background:var(--control-bg);
+    backdrop-filter:blur(6px);
+    box-shadow:0 6px 20px rgba(0,0,0,.08);
+
+    font-size:18px;
+    cursor:pointer;
+    color:var(--control-text);
+
+    transition:background-color .3s ease, color .3s ease, transform .2s ease, opacity .2s ease;
+}
+
+.theme-toggle:hover{
+
+    transform:scale(1.08);
 }
 
 .photo .caption{
@@ -204,11 +274,98 @@ header p{
     opacity:1;
 }
 
+.lightbox{
+
+    position:fixed;
+    inset:0;
+    z-index:300;
+
+    display:none;
+    align-items:center;
+    justify-content:center;
+
+    padding:60px 40px;
+
+    background:rgba(0,0,0,.85);
+}
+
+.lightbox.open{
+
+    display:flex;
+}
+
+.lightbox-content{
+
+    position:relative;
+    max-width:90vw;
+    max-height:90vh;
+
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+}
+
+.lightbox-content img{
+
+    display:block;
+    max-width:90vw;
+    max-height:80vh;
+    border-radius:8px;
+    box-shadow:0 25px 60px rgba(0,0,0,.5);
+}
+
+.lightbox-caption{
+
+    margin-top:18px;
+    max-width:600px;
+
+    color:#f2f0ec;
+    font-size:15px;
+    text-align:center;
+}
+
+.lightbox-close{
+
+    position:fixed;
+    top:24px;
+    right:24px;
+    z-index:310;
+
+    width:44px;
+    height:44px;
+    border:none;
+    border-radius:50%;
+
+    display:flex;
+    align-items:center;
+    justify-content:center;
+
+    background:rgba(255,255,255,.15);
+    color:#fff;
+    font-size:24px;
+    line-height:1;
+    cursor:pointer;
+
+    transition:background-color .2s ease;
+}
+
+.lightbox-close:hover{
+
+    background:rgba(255,255,255,.3);
+}
+
+body.lightbox-active .height-control,
+body.lightbox-active .theme-toggle{
+
+    opacity:0;
+    pointer-events:none;
+}
+
 footer{
 
     text-align:center;
     padding:120px 20px;
-    color:#777;
+    color:var(--muted);
     font-family:"Cormorant Garamond",serif;
     font-size:28px;
 }
@@ -250,6 +407,21 @@ header h1{
     width:80px;
 }
 
+.theme-toggle{
+
+    top:14px;
+    left:14px;
+    width:38px;
+    height:38px;
+    font-size:16px;
+}
+
+.lightbox-close{
+
+    top:14px;
+    right:14px;
+}
+
 }
 
 </style>
@@ -257,6 +429,8 @@ header h1{
 </head>
 
 <body>
+
+<button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode">🌙</button>
 
 <div class="height-control">
 <label for="heightSlider">Height</label>
@@ -280,6 +454,14 @@ header h1{
 “The days are long, but the years are short.”
 
 </footer>
+
+<div class="lightbox" id="lightbox">
+<button class="lightbox-close" id="lightboxClose" aria-label="Close">&times;</button>
+<div class="lightbox-content">
+<img id="lightboxImg" src="" alt="">
+<div class="lightbox-caption" id="lightboxCaption"></div>
+</div>
+</div>
 
 <script>
 
@@ -454,6 +636,7 @@ async function buildTimeline(){
             img.src = photo.src;
             img.loading = 'lazy';
             img.alt = captions[photo.key] || `${year} photo`;
+            img.addEventListener('click', () => openLightbox(photo.src, img.alt, captions[photo.key]));
             card.appendChild(img);
 
             const cap = captions[photo.key];
@@ -501,6 +684,54 @@ window.addEventListener('resize', debounce(() => {
     updateHeaderHeightVar();
     layoutAll();
 }, 150));
+
+const themeToggle = document.getElementById('themeToggle');
+
+function applyTheme(theme){
+    if(theme === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+    else document.documentElement.removeAttribute('data-theme');
+    themeToggle.textContent = theme === 'dark' ? '☀️' : '🌙';
+    localStorage.setItem('theme', theme);
+}
+
+applyTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
+
+themeToggle.addEventListener('click', () => {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    applyTheme(isDark ? 'light' : 'dark');
+    updateHeaderHeightVar();
+});
+
+const lightbox = document.getElementById('lightbox');
+const lightboxImg = document.getElementById('lightboxImg');
+const lightboxCaption = document.getElementById('lightboxCaption');
+const lightboxClose = document.getElementById('lightboxClose');
+
+function openLightbox(src, alt, caption){
+    lightboxImg.src = src;
+    lightboxImg.alt = alt || '';
+    lightboxCaption.textContent = caption || '';
+    lightboxCaption.style.display = caption ? 'block' : 'none';
+    lightbox.classList.add('open');
+    document.body.classList.add('lightbox-active');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeLightbox(){
+    lightbox.classList.remove('open');
+    document.body.classList.remove('lightbox-active');
+    document.body.style.overflow = '';
+}
+
+lightboxClose.addEventListener('click', closeLightbox);
+
+lightbox.addEventListener('click', e => {
+    if(e.target === lightbox) closeLightbox();
+});
+
+document.addEventListener('keydown', e => {
+    if(e.key === 'Escape') closeLightbox();
+});
 
 </script>
 
