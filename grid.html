@@ -21,6 +21,10 @@
 
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
 
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"></script>
+<script src="crop-tools.js"></script>
+
 <style>
 
 *{
@@ -335,7 +339,8 @@ header p{
 }
 
 body.lightbox-active .theme-toggle,
-body.lightbox-active .size-control{
+body.lightbox-active .size-control,
+body.lightbox-active .ct-edit-toggle{
 
     opacity:0;
     pointer-events:none;
@@ -447,15 +452,22 @@ function checkImage(src){
     });
 }
 
+const cropTargets = [];
+
 async function buildGrid(){
     const grid = document.getElementById('yearGrid');
 
-    const yearPromises = [];
-    for(let year = START_YEAR; year <= END_YEAR; year++){
-        const src = `photos/${year}-1.jpg`;
-        yearPromises.push(checkImage(src).then(ok => ({ year, src, ok })));
-    }
-    const years = await Promise.all(yearPromises);
+    const [years, crops] = await Promise.all([
+        (async () => {
+            const yearPromises = [];
+            for(let year = START_YEAR; year <= END_YEAR; year++){
+                const src = `photos/${year}-1.jpg`;
+                yearPromises.push(checkImage(src).then(ok => ({ year, src, ok })));
+            }
+            return Promise.all(yearPromises);
+        })(),
+        CropTools.loadCrops()
+    ]);
 
     years.forEach(({ year, src, ok }) => {
         const cell = document.createElement('div');
@@ -469,14 +481,22 @@ async function buildGrid(){
         const box = document.createElement('div');
         box.className = 'photo-box';
 
+        let img = null;
+        let cropRect = null;
+
         if(ok){
             box.classList.add('has-photo');
-            const img = document.createElement('img');
+            const key = `${year}-1`;
+            img = document.createElement('img');
             img.src = src;
             img.loading = 'lazy';
             img.alt = `${year}`;
-            img.addEventListener('click', () => openLightbox(src, `${year}`));
+            img.addEventListener('click', () => {
+                if(CropTools.isEditMode()) CropTools.openEditor(key, src);
+                else openLightbox(src, `${year}`);
+            });
             box.appendChild(img);
+            cropRect = crops[key] && crops[key].grid;
         } else {
             box.classList.add('empty');
             box.innerHTML = '<span>—</span>';
@@ -484,8 +504,26 @@ async function buildGrid(){
 
         cell.appendChild(box);
         grid.appendChild(cell);
+
+        // Apply the crop only after box/img are attached to the live DOM,
+        // otherwise box.clientWidth is still 0 and the transform is a no-op.
+        if(cropRect){
+            const target = { img, box, cropRect };
+            cropTargets.push(target);
+            if(img.complete && img.naturalWidth) CropTools.applyCrop(img, box, cropRect);
+            else img.addEventListener('load', () => CropTools.applyCrop(img, box, cropRect), { once: true });
+        }
     });
 }
+
+function reapplyCrops(){
+    cropTargets.forEach(({ img, box, cropRect }) => {
+        if(img.complete && img.naturalWidth) CropTools.applyCrop(img, box, cropRect);
+    });
+}
+
+CropTools.init();
+CropTools.onSaved(() => {});
 
 buildGrid();
 
@@ -502,6 +540,11 @@ applyCellSize();
 sizeSlider.addEventListener('input', () => {
     localStorage.setItem('gridCellSize', sizeSlider.value);
     applyCellSize();
+    requestAnimationFrame(reapplyCrops);
+});
+
+window.addEventListener('resize', () => {
+    requestAnimationFrame(reapplyCrops);
 });
 
 const themeToggle = document.getElementById('themeToggle');
