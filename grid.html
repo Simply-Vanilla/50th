@@ -30,6 +30,8 @@
 }
 
 :root{
+    --cell-size:130px;
+
     --bg:#f8f6f3;
     --text:#222;
     --heading:#222;
@@ -103,14 +105,14 @@ header p{
 
 .view-switch{
 
-    margin-top:22px;
+    margin-bottom:20px;
 }
 
 .view-switch a{
 
     color:var(--muted);
-    font-size:12px;
-    letter-spacing:2px;
+    font-size:10px;
+    letter-spacing:1.5px;
     text-transform:uppercase;
     text-decoration:none;
     border-bottom:1px solid var(--border);
@@ -130,8 +132,10 @@ header p{
     margin:20px auto 100px;
 
     display:grid;
-    grid-template-columns:repeat(10, 1fr);
+    grid-template-columns:repeat(auto-fill, minmax(var(--cell-size), 1fr));
     gap:26px 14px;
+
+    transition:gap .2s ease;
 }
 
 .year-cell{
@@ -145,9 +149,10 @@ header p{
 .year-cell .year-label{
 
     font-family:"Cormorant Garamond",serif;
-    font-size:15px;
+    font-size:clamp(12px, calc(var(--cell-size) * 0.115), 34px);
     letter-spacing:2px;
     color:var(--heading);
+    transition:font-size .2s ease;
 }
 
 .photo-box{
@@ -192,7 +197,39 @@ header p{
 .photo-box.empty span{
 
     color:var(--muted2);
-    font-size:18px;
+    font-size:clamp(12px, calc(var(--cell-size) * 0.14), 28px);
+}
+
+.size-control{
+
+    position:fixed;
+    top:24px;
+    right:24px;
+    z-index:100;
+
+    display:flex;
+    align-items:center;
+    gap:10px;
+
+    padding:10px 18px;
+    border-radius:30px;
+
+    background:var(--control-bg);
+    backdrop-filter:blur(6px);
+    box-shadow:0 6px 20px rgba(0,0,0,.08);
+
+    font-size:11px;
+    letter-spacing:2px;
+    text-transform:uppercase;
+    color:var(--control-text);
+
+    transition:background-color .3s ease, color .3s ease, opacity .2s ease;
+}
+
+.size-control input[type=range]{
+
+    width:110px;
+    accent-color:var(--text);
 }
 
 .theme-toggle{
@@ -297,7 +334,8 @@ header p{
     background:rgba(255,255,255,.3);
 }
 
-body.lightbox-active .theme-toggle{
+body.lightbox-active .theme-toggle,
+body.lightbox-active .size-control{
 
     opacity:0;
     pointer-events:none;
@@ -312,20 +350,10 @@ footer{
     font-size:28px;
 }
 
-@media(max-width:1100px){
-
-.year-grid{
-
-    grid-template-columns:repeat(6, 1fr);
-}
-
-}
-
 @media(max-width:700px){
 
 .year-grid{
 
-    grid-template-columns:repeat(4, 1fr);
     gap:20px 10px;
 }
 
@@ -343,19 +371,22 @@ header h1{
     font-size:16px;
 }
 
+.size-control{
+
+    top:14px;
+    right:14px;
+    padding:8px 14px;
+}
+
+.size-control input[type=range]{
+
+    width:80px;
+}
+
 .lightbox-close{
 
     top:14px;
     right:14px;
-}
-
-}
-
-@media(max-width:420px){
-
-.year-grid{
-
-    grid-template-columns:repeat(3, 1fr);
 }
 
 }
@@ -368,17 +399,22 @@ header h1{
 
 <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode">🌙</button>
 
+<div class="size-control">
+<label for="sizeSlider">Size</label>
+<input type="range" id="sizeSlider" min="70" max="260" step="10" value="130">
+</div>
+
 <header>
+
+<div class="view-switch">
+<a href="index.html">Timeline View →</a>
+</div>
 
 <h1>CARL WOOLDRIDGE</h1>
 
 <h2>50 YEARS</h2>
 
 <p>August 1976 — August 2026</p>
-
-<div class="view-switch">
-<a href="index.html">Timeline View →</a>
-</div>
 
 </header>
 
@@ -452,6 +488,21 @@ async function buildGrid(){
 }
 
 buildGrid();
+
+const sizeSlider = document.getElementById('sizeSlider');
+const savedSize = localStorage.getItem('gridCellSize');
+if(savedSize) sizeSlider.value = savedSize;
+
+function applyCellSize(){
+    document.documentElement.style.setProperty('--cell-size', sizeSlider.value + 'px');
+}
+
+applyCellSize();
+
+sizeSlider.addEventListener('input', () => {
+    localStorage.setItem('gridCellSize', sizeSlider.value);
+    applyCellSize();
+});
 
 const themeToggle = document.getElementById('themeToggle');
 
