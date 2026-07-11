@@ -20,7 +20,7 @@
 }
 
 :root{
-    --photo-height:300px;
+    --header-height:320px;
 }
 
 body{
@@ -32,6 +32,12 @@ body{
 }
 
 header{
+
+    position:sticky;
+    top:0;
+    z-index:50;
+
+    background:#f8f6f3;
 
     text-align:center;
     padding:80px 20px 100px;
@@ -94,7 +100,7 @@ header p{
 .year-label{
 
     position:sticky;
-    top:80px;
+    top:calc(var(--header-height) + 24px);
     align-self:start;
 }
 
@@ -133,11 +139,10 @@ header p{
 .photo img{
 
     display:block;
-    height:var(--photo-height);
     width:auto;
     max-width:100%;
     border-radius:8px;
-    transition:height .25s ease, transform .35s ease;
+    transition:height .2s ease, transform .35s ease;
 }
 
 .photo:hover img{
@@ -281,12 +286,13 @@ header h1{
 const START_YEAR = 1976;
 const END_YEAR = 2026;
 const MAX_PHOTOS_PER_YEAR = 40;
+const PHOTO_GAP = 16;
 
 function loadImage(src){
     return new Promise(resolve => {
         const img = new Image();
-        img.onload = () => resolve(true);
-        img.onerror = () => resolve(false);
+        img.onload = () => resolve({ ok: true, ratio: img.naturalWidth / img.naturalHeight || 1 });
+        img.onerror = () => resolve({ ok: false });
         img.src = src;
     });
 }
@@ -295,11 +301,62 @@ async function findPhotosForYear(year){
     const photos = [];
     for(let n = 1; n <= MAX_PHOTOS_PER_YEAR; n++){
         const src = `photos/${year}-${n}.jpg`;
-        const ok = await loadImage(src);
-        if(!ok) break;
-        photos.push({ src, key: `${year}-${n}` });
+        const result = await loadImage(src);
+        if(!result.ok) break;
+        photos.push({ src, key: `${year}-${n}`, ratio: result.ratio });
     }
     return photos;
+}
+
+function debounce(fn, wait){
+    let t;
+    return (...args) => {
+        clearTimeout(t);
+        t = setTimeout(() => fn(...args), wait);
+    };
+}
+
+function simulateRowCount(items, containerWidth, rowHeight, gap){
+    let rows = 1, cur = 0;
+    items.forEach((item, i) => {
+        const w = Math.min(rowHeight * item.ratio, containerWidth);
+        if(i === 0){ cur = w; return; }
+        if(cur + gap + w > containerWidth){ rows++; cur = w; }
+        else cur += gap + w;
+    });
+    return rows;
+}
+
+function computeRowHeight(items, containerWidth, targetHeight, gap){
+    if(items.length === 0 || containerWidth <= 0) return targetHeight;
+    let lo = 20, hi = Math.max(targetHeight, 20);
+    for(let i = 0; i < 20; i++){
+        const mid = (lo + hi) / 2;
+        const rows = simulateRowCount(items, containerWidth, mid, gap);
+        const total = rows * mid + (rows - 1) * gap;
+        if(total > targetHeight) hi = mid; else lo = mid;
+    }
+    return lo;
+}
+
+const yearBlocks = [];
+
+function layoutYear(block, targetHeight){
+    const containerWidth = block.photosEl.clientWidth;
+    const rowHeight = computeRowHeight(block.items, containerWidth, targetHeight, PHOTO_GAP);
+    block.items.forEach(item => {
+        item.imgEl.style.height = rowHeight + 'px';
+    });
+}
+
+function layoutAll(){
+    const targetHeight = parseFloat(heightSlider.value);
+    yearBlocks.forEach(block => layoutYear(block, targetHeight));
+}
+
+function updateHeaderHeightVar(){
+    const header = document.querySelector('header');
+    document.documentElement.style.setProperty('--header-height', header.offsetHeight + 'px');
 }
 
 function parseCSV(text){
@@ -387,6 +444,8 @@ async function buildTimeline(){
         const grid = document.createElement('div');
         grid.className = 'photos';
 
+        const items = [];
+
         for(const photo of photos){
             const card = document.createElement('div');
             card.className = 'photo';
@@ -406,10 +465,13 @@ async function buildTimeline(){
             }
 
             grid.appendChild(card);
+            items.push({ ratio: photo.ratio, imgEl: img });
         }
 
         section.appendChild(grid);
         timeline.appendChild(section);
+
+        yearBlocks.push({ photosEl: grid, items });
     }
 
     if(rendered === 0){
@@ -420,18 +482,25 @@ async function buildTimeline(){
     }
 }
 
-buildTimeline();
-
 const heightSlider = document.getElementById('heightSlider');
-const savedHeight = localStorage.getItem('photoHeight');
-if(savedHeight){
-    heightSlider.value = savedHeight;
-    document.documentElement.style.setProperty('--photo-height', savedHeight + 'px');
-}
-heightSlider.addEventListener('input', () => {
-    document.documentElement.style.setProperty('--photo-height', heightSlider.value + 'px');
-    localStorage.setItem('photoHeight', heightSlider.value);
+const savedHeight = localStorage.getItem('yearHeight');
+if(savedHeight) heightSlider.value = savedHeight;
+
+updateHeaderHeightVar();
+
+buildTimeline().then(() => {
+    requestAnimationFrame(layoutAll);
 });
+
+heightSlider.addEventListener('input', () => {
+    localStorage.setItem('yearHeight', heightSlider.value);
+    layoutAll();
+});
+
+window.addEventListener('resize', debounce(() => {
+    updateHeaderHeightVar();
+    layoutAll();
+}, 150));
 
 </script>
 
