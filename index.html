@@ -101,6 +101,29 @@ header p{
     color:var(--muted);
 }
 
+.view-switch{
+
+    margin-top:18px;
+}
+
+.view-switch a{
+
+    color:var(--muted);
+    font-size:12px;
+    letter-spacing:2px;
+    text-transform:uppercase;
+    text-decoration:none;
+    border-bottom:1px solid var(--border);
+    padding-bottom:2px;
+    transition:color .2s ease, border-color .2s ease;
+}
+
+.view-switch a:hover{
+
+    color:var(--heading);
+    border-color:var(--heading);
+}
+
 .timeline{
 
     width:min(1050px,92%);
@@ -444,6 +467,10 @@ header h1{
 <h2>50 YEARS</h2>
 
 <p>1976 — 2026</p>
+
+<div class="view-switch">
+<a href="grid.html">Grid View →</a>
+</div>
 
 </header>
 
