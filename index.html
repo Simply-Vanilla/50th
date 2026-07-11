@@ -21,6 +21,10 @@
 
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
 
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"></script>
+<script src="crop-tools.js"></script>
+
 <style>
 
 *{
@@ -378,7 +382,8 @@ header p{
 }
 
 body.lightbox-active .height-control,
-body.lightbox-active .theme-toggle{
+body.lightbox-active .theme-toggle,
+body.lightbox-active .ct-edit-toggle{
 
     opacity:0;
     pointer-events:none;
@@ -554,7 +559,18 @@ function layoutYear(block, targetHeight){
     const containerWidth = block.photosEl.clientWidth;
     const rowHeight = computeRowHeight(block.items, containerWidth, targetHeight, PHOTO_GAP);
     block.items.forEach(item => {
-        item.imgEl.style.height = rowHeight + 'px';
+        if(item.crop){
+            const card = item.imgEl.parentElement;
+            card.style.width = (rowHeight * item.ratio) + 'px';
+            card.style.height = rowHeight + 'px';
+            if(item.imgEl.complete && item.imgEl.naturalWidth){
+                CropTools.applyCrop(item.imgEl, card, item.crop);
+            } else {
+                item.imgEl.addEventListener('load', () => CropTools.applyCrop(item.imgEl, card, item.crop), { once: true });
+            }
+        } else {
+            item.imgEl.style.height = rowHeight + 'px';
+        }
     });
 }
 
@@ -615,7 +631,7 @@ async function loadCaptions(){
 
 async function buildTimeline(){
     const timeline = document.getElementById('timeline');
-    const captions = await loadCaptions();
+    const [captions, crops] = await Promise.all([loadCaptions(), CropTools.loadCrops()]);
 
     const yearPromises = [];
     for(let year = START_YEAR; year <= END_YEAR; year++){
@@ -663,7 +679,10 @@ async function buildTimeline(){
             img.src = photo.src;
             img.loading = 'lazy';
             img.alt = captions[photo.key] || `${year} photo`;
-            img.addEventListener('click', () => openLightbox(photo.src, img.alt, captions[photo.key]));
+            img.addEventListener('click', () => {
+                if(CropTools.isEditMode()) CropTools.openEditor(photo.key, photo.src);
+                else openLightbox(photo.src, img.alt, captions[photo.key]);
+            });
             card.appendChild(img);
 
             const cap = captions[photo.key];
@@ -675,7 +694,10 @@ async function buildTimeline(){
             }
 
             grid.appendChild(card);
-            items.push({ ratio: photo.ratio, imgEl: img });
+
+            const cropRect = crops[photo.key] && crops[photo.key].timeline;
+            const ratio = cropRect ? (cropRect.w / cropRect.h) * photo.ratio : photo.ratio;
+            items.push({ ratio, imgEl: img, crop: cropRect || null });
         }
 
         section.appendChild(grid);
@@ -697,6 +719,9 @@ const savedHeight = localStorage.getItem('yearHeight');
 if(savedHeight) heightSlider.value = savedHeight;
 
 updateHeaderHeightVar();
+
+CropTools.init();
+CropTools.onSaved(() => {});
 
 buildTimeline().then(() => {
     requestAnimationFrame(layoutAll);
