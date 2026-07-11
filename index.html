@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Carl Wooldridge | 50 Years</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+
+<style>
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+body{
+
+    background:#f8f6f3;
+    color:#222;
+    font-family:Inter,sans-serif;
+    line-height:1.6;
+}
+
+header{
+
+    text-align:center;
+    padding:80px 20px 100px;
+}
+
+header h1{
+
+    font-family:"Cormorant Garamond",serif;
+    font-size:68px;
+    font-weight:400;
+    letter-spacing:6px;
+}
+
+header h2{
+
+    margin-top:18px;
+    font-size:20px;
+    letter-spacing:5px;
+    color:#666;
+    font-weight:300;
+}
+
+header p{
+
+    margin-top:30px;
+    color:#777;
+}
+
+.timeline{
+
+    width:min(1050px,92%);
+    margin:auto;
+}
+
+.year{
+
+    display:grid;
+    grid-template-columns:220px 1fr;
+    gap:70px;
+
+    padding:90px 0;
+
+    border-top:1px solid #ddd;
+}
+
+.year:first-child{
+
+    border-top:none;
+}
+
+.year-label{
+
+    position:sticky;
+    top:80px;
+    align-self:start;
+}
+
+.year-number{
+
+    font-family:"Cormorant Garamond",serif;
+    font-size:64px;
+    font-weight:400;
+}
+
+.year-sub{
+
+    margin-top:8px;
+    color:#888;
+    letter-spacing:2px;
+    font-size:13px;
+    text-transform:uppercase;
+}
+
+.photos{
+
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+    gap:22px;
+}
+
+.photo{
+
+    overflow:hidden;
+    border-radius:8px;
+    background:white;
+
+    box-shadow:0 10px 25px rgba(0,0,0,.08);
+
+    transition:.35s;
+}
+
+.photo:hover{
+
+    transform:translateY(-5px);
+    box-shadow:0 18px 35px rgba(0,0,0,.18);
+}
+
+.photo img{
+
+    display:block;
+    width:100%;
+    aspect-ratio:4/5;
+    object-fit:cover;
+}
+
+footer{
+
+    text-align:center;
+    padding:120px 20px;
+    color:#777;
+    font-family:"Cormorant Garamond",serif;
+    font-size:28px;
+}
+
+@media(max-width:900px){
+
+.year{
+
+    grid-template-columns:1fr;
+    gap:35px;
+    padding:60px 0;
+}
+
+.year-label{
+
+    position:relative;
+    top:auto;
+}
+
+.year-number{
+
+    font-size:48px;
+}
+
+header h1{
+
+    font-size:48px;
+}
+
+}
+
+</style>
+
+</head>
+
+<body>
+
+<header>
+
+<h1>CARL WOOLDRIDGE</h1>
+
+<h2>50 YEARS</h2>
+
+<p>August 1976 — August 2026</p>
+
+</header>
+
+<div class="timeline">
+
+<!-- ====================== -->
+
+<section class="year">
+
+<div class="year-label">
+
+<div class="year-number">1976</div>
+
+<div class="year-sub">The Beginning</div>
+
+</div>
+
+<div class="photos">
+
+<div class="photo">
+<img src="photos/1976-1.jpg">
+</div>
+
+</div>
+
+</section>
+
+<!-- ====================== -->
+
+<section class="year">
+
+<div class="year-label">
+
+<div class="year-number">1977</div>
+
+</div>
+
+<div class="photos">
+
+<div class="photo">
+<img src="photos/1977-1.jpg">
+</div>
+
+<div class="photo">
+<img src="photos/1977-2.jpg">
+</div>
+
+</div>
+
+</section>
+
+<!-- ====================== -->
+
+<section class="year">
+
+<div class="year-label">
+
+<div class="year-number">1978</div>
+
+</div>
+
+<div class="photos">
+
+<div class="photo">
+<img src="photos/1978-1.jpg">
+</div>
+
+</div>
+
+</section>
+
+<!-- Continue through 2026 -->
+
+</div>
+
+<footer>
+
+“The days are long, but the years are short.”
+
+</footer>
+
+</body>
+</html>
