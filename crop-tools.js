@@ -125,6 +125,41 @@ async function saveCropsToGitHub(updatedCrops, message){
     return res.json();
 }
 
+async function fetchFileSha(path){
+    const token = getToken();
+    const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${path}?ref=${GITHUB_BRANCH}`;
+    const res = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github+json' }
+    });
+    if(res.status === 404) return null;
+    if(!res.ok) throw new Error(`GitHub API error (${res.status}) looking up ${path}`);
+    const data = await res.json();
+    return data.sha;
+}
+
+async function deleteFileFromGitHub(path, sha, message){
+    const token = getToken();
+    if(!token) throw new Error('No GitHub token set.');
+
+    const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${path}`;
+    const res = await fetch(url, {
+        method: 'DELETE',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/vnd.github+json',
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ message, sha, branch: GITHUB_BRANCH })
+    });
+
+    if(!res.ok){
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || `GitHub API error (${res.status})`);
+    }
+
+    return res.json();
+}
+
 async function publishChanges(){
     if(dirtyKeys.size === 0) return;
     if(!getToken()){ openTokenModal(); return; }
@@ -166,6 +201,7 @@ function applyCrop(imgEl, wrapperEl, crop){
 
     imgEl.style.position = 'absolute';
     imgEl.style.maxWidth = 'none';
+    imgEl.style.maxHeight = 'none';
     imgEl.style.width = (nw * s) + 'px';
     imgEl.style.height = (nh * s) + 'px';
     imgEl.style.left = ((W - cropPxW * s) / 2 - crop.x * nw * s) + 'px';
@@ -375,6 +411,14 @@ body.ct-modal-active .ct-edit-toggle{
     cursor:pointer;
 }
 
+.ct-mode-label{
+    font-size:11px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:var(--muted);
+    margin-bottom:10px;
+}
+
 .ct-cropper-wrap{
     max-height:55vh;
     margin-bottom:16px;
@@ -390,8 +434,13 @@ body.ct-modal-active .ct-edit-toggle{
 
 .ct-actions{
     display:flex;
+    align-items:center;
     justify-content:flex-end;
     gap:10px;
+}
+
+.ct-actions-spacer{
+    flex:1;
 }
 
 .ct-btn{
@@ -412,6 +461,19 @@ body.ct-modal-active .ct-edit-toggle{
 }
 
 .ct-btn-primary:disabled{ opacity:.6; cursor:default; }
+
+.ct-btn-danger{
+    color:#b3432f;
+    border-color:#b3432f;
+    background:transparent;
+}
+
+.ct-btn-danger:hover{
+    background:#b3432f;
+    color:#fff;
+}
+
+.ct-btn-danger:disabled{ opacity:.6; cursor:default; }
 
 .ct-status{
     margin-top:12px;
@@ -499,9 +561,14 @@ function injectMarkup(){
     <button class="ct-close" id="ctClose" aria-label="Close">&times;</button>
     <div class="ct-title" id="ctTitle">Edit Crop</div>
 
-    <div class="ct-checks">
+    <label class="ct-grid-photo">
+      <input type="checkbox" id="ctGridPhotoToggle">
+      <span>Use this photo as the Grid View photo for <strong id="ctGridPhotoYear"></strong></span>
+    </label>
+
+    <div class="ct-checks" id="ctSameRow">
       <label class="ct-check">
-        <input type="checkbox" id="ctSameToggle" checked>
+        <input type="checkbox" id="ctSameToggle">
         Use the same crop for both views
       </label>
       <label class="ct-check">
@@ -515,16 +582,15 @@ function injectMarkup(){
       <button class="ct-tab" data-target="timeline" type="button">Timeline View</button>
     </div>
 
-    <label class="ct-grid-photo">
-      <input type="checkbox" id="ctGridPhotoToggle">
-      <span>Use this photo as the Grid View photo for <strong id="ctGridPhotoYear"></strong></span>
-    </label>
+    <div class="ct-mode-label" id="ctModeLabel"></div>
 
     <div class="ct-cropper-wrap">
       <img id="ctImage" src="" alt="">
     </div>
 
     <div class="ct-actions">
+      <button class="ct-btn ct-btn-danger" id="ctDeleteBtn" type="button">Delete Photo</button>
+      <div class="ct-actions-spacer"></div>
       <button class="ct-btn" id="ctResetBtn" type="button">Reset Crop</button>
       <button class="ct-btn ct-btn-primary" id="ctSaveBtn" type="button">Save</button>
     </div>
@@ -568,7 +634,12 @@ function rectsEqual(a, b){
            Math.abs(a.w - b.w) < 0.001 && Math.abs(a.h - b.h) < 0.001;
 }
 
+function isGridPhoto(){
+    return document.getElementById('ctGridPhotoToggle').checked;
+}
+
 function currentAspect(){
+    if(!isGridPhoto()) return NaN;
     if(squareLock) return 1;
     if(sameForBoth) return NaN;
     return activeTab === 'grid' ? 1 : NaN;
@@ -591,7 +662,8 @@ function captureCurrentRect(){
 function captureIntoCropData(){
     const rect = captureCurrentRect();
     if(!rect) return;
-    if(sameForBoth) cropData.grid = rect;
+    if(!isGridPhoto()) cropData.timeline = rect;
+    else if(sameForBoth) cropData.grid = rect;
     else cropData[activeTab] = rect;
 }
 
@@ -604,7 +676,9 @@ function initCropper(){
         autoCropArea: 0.9,
         background: false,
         ready(){
-            const existingRect = sameForBoth ? (cropData.grid || cropData.timeline) : cropData[activeTab];
+            let existingRect;
+            if(!isGridPhoto()) existingRect = cropData.timeline;
+            else existingRect = sameForBoth ? (cropData.grid || cropData.timeline) : cropData[activeTab];
             if(existingRect){
                 const nw = img.naturalWidth, nh = img.naturalHeight;
                 cropper.setData({
@@ -625,8 +699,26 @@ function setActiveTab(tab){
     initCropper();
 }
 
-function updateTabsVisibility(){
-    document.getElementById('ctTabs').style.display = sameForBoth ? 'none' : 'flex';
+function updateGridPhotoUI(){
+    const gridPhoto = isGridPhoto();
+    const sameRow = document.getElementById('ctSameRow');
+    const modeLabel = document.getElementById('ctModeLabel');
+
+    if(!gridPhoto){
+        sameRow.style.display = 'none';
+        document.getElementById('ctTabs').style.display = 'none';
+        modeLabel.textContent = 'Timeline View Crop';
+        modeLabel.style.display = 'block';
+    } else {
+        sameRow.style.display = 'flex';
+        if(sameForBoth){
+            document.getElementById('ctTabs').style.display = 'none';
+            modeLabel.style.display = 'none';
+        } else {
+            document.getElementById('ctTabs').style.display = 'flex';
+            modeLabel.style.display = 'none';
+        }
+    }
 }
 
 async function openEditor(key, src, year){
@@ -639,7 +731,7 @@ async function openEditor(key, src, year){
         grid: existing.grid || null,
         timeline: existing.timeline || null
     };
-    sameForBoth = !(existing.grid && existing.timeline && !rectsEqual(existing.grid, existing.timeline));
+    sameForBoth = !!(existing.grid && existing.timeline && rectsEqual(existing.grid, existing.timeline));
     squareLock = false;
 
     document.getElementById('ctSameToggle').checked = sameForBoth;
@@ -648,12 +740,12 @@ async function openEditor(key, src, year){
     document.getElementById('ctStatus').textContent = '';
     activeTab = 'grid';
     document.querySelectorAll('.ct-tab').forEach(b => b.classList.toggle('active', b.dataset.target === 'grid'));
-    updateTabsVisibility();
 
     const num = parseInt(String(key).split('-')[1], 10);
     const designatedNum = getYearPhotoNumber(crops, currentYear);
     document.getElementById('ctGridPhotoToggle').checked = designatedNum === num;
     document.getElementById('ctGridPhotoYear').textContent = currentYear;
+    updateGridPhotoUI();
 
     const img = document.getElementById('ctImage');
     img.onload = () => initCropper();
@@ -674,22 +766,32 @@ function closeEditor(){
 async function handleSave(){
     const rect = captureCurrentRect();
     if(!rect) return;
-    cropData[activeTab] = rect;
-
-    let finalGrid, finalTimeline;
-    if(sameForBoth){
-        finalGrid = rect;
-        finalTimeline = rect;
-    } else {
-        finalGrid = cropData.grid || rect;
-        finalTimeline = cropData.timeline || rect;
-    }
 
     const crops = await loadCrops();
+    const useAsGridPhoto = isGridPhoto();
+    const existingEntry = crops[currentKey] || {};
+
+    let finalGrid = existingEntry.grid || null;
+    let finalTimeline;
+
+    if(!useAsGridPhoto){
+        // Only the timeline crop is editable in this mode - leave any
+        // existing grid crop (from before the checkbox was unchecked) alone.
+        finalTimeline = rect;
+    } else {
+        cropData[activeTab] = rect;
+        if(sameForBoth){
+            finalGrid = rect;
+            finalTimeline = rect;
+        } else {
+            finalGrid = cropData.grid || rect;
+            finalTimeline = cropData.timeline || rect;
+        }
+    }
+
     crops[currentKey] = { grid: finalGrid, timeline: finalTimeline };
     markDirty(currentKey);
 
-    const useAsGridPhoto = document.getElementById('ctGridPhotoToggle').checked;
     const num = parseInt(String(currentKey).split('-')[1], 10);
     if(!crops._yearPhoto) crops._yearPhoto = {};
     const prevDesignated = crops._yearPhoto[currentYear];
@@ -721,6 +823,43 @@ async function handleReset(){
     document.getElementById('ctStatus').textContent = 'Reset locally — click Publish when you’re ready.';
     if(onSavedCallback) onSavedCallback(currentKey);
     setTimeout(closeEditor, 500);
+}
+
+async function handleDelete(){
+    if(!getToken()){ openTokenModal(); return; }
+
+    const path = `photos/${currentKey}.jpg`;
+    const confirmed = confirm(`Delete ${path} from GitHub? This permanently removes the file and can't be undone.`);
+    if(!confirmed) return;
+
+    const statusEl = document.getElementById('ctStatus');
+    const deleteBtn = document.getElementById('ctDeleteBtn');
+    statusEl.textContent = 'Deleting…';
+    deleteBtn.disabled = true;
+
+    try {
+        const sha = await fetchFileSha(path);
+        if(sha == null) throw new Error('File not found on GitHub - it may already be deleted.');
+        await deleteFileFromGitHub(path, sha, `Delete photo ${currentKey}.jpg`);
+
+        const crops = await loadCrops();
+        delete crops[currentKey];
+        const num = parseInt(String(currentKey).split('-')[1], 10);
+        if(crops._yearPhoto && crops._yearPhoto[currentYear] === num){
+            delete crops._yearPhoto[currentYear];
+            if(Object.keys(crops._yearPhoto).length === 0) delete crops._yearPhoto;
+        }
+        markDirty(currentKey);
+        await publishChanges();
+
+        statusEl.textContent = 'Deleted ✓';
+        if(onSavedCallback) onSavedCallback(currentKey);
+        setTimeout(closeEditor, 700);
+    } catch(e){
+        statusEl.textContent = 'Delete failed: ' + e.message;
+    } finally {
+        deleteBtn.disabled = false;
+    }
 }
 
 // ---------------------------------------------------------------------
@@ -781,7 +920,7 @@ function wireEvents(){
     document.getElementById('ctSameToggle').addEventListener('change', e => {
         captureIntoCropData();
         sameForBoth = e.target.checked;
-        updateTabsVisibility();
+        updateGridPhotoUI();
         initCropper();
     });
 
@@ -791,12 +930,19 @@ function wireEvents(){
         initCropper();
     });
 
+    document.getElementById('ctGridPhotoToggle').addEventListener('change', () => {
+        captureIntoCropData();
+        updateGridPhotoUI();
+        initCropper();
+    });
+
     document.querySelectorAll('.ct-tab').forEach(btn => {
         btn.addEventListener('click', () => setActiveTab(btn.dataset.target));
     });
 
     document.getElementById('ctSaveBtn').addEventListener('click', handleSave);
     document.getElementById('ctResetBtn').addEventListener('click', handleReset);
+    document.getElementById('ctDeleteBtn').addEventListener('click', handleDelete);
     document.getElementById('ctChangeToken').addEventListener('click', openTokenModal);
 
     document.getElementById('ctTokenSave').addEventListener('click', () => {
