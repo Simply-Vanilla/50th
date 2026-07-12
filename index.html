@@ -554,6 +554,19 @@ function computeRowHeight(items, containerWidth, targetHeight, gap){
 }
 
 const yearBlocks = [];
+let dragSrcEl = null;
+
+function finishReorder(grid, year){
+    const newOrder = Array.from(grid.children).map(c => parseInt(c.dataset.num, 10));
+    CropTools.setYearOrder(year, newOrder);
+
+    const block = yearBlocks.find(b => b.photosEl === grid);
+    if(block){
+        const domOrder = Array.from(grid.children);
+        block.items.sort((a, b) => domOrder.indexOf(a.imgEl.parentElement) - domOrder.indexOf(b.imgEl.parentElement));
+    }
+    layoutAll();
+}
 
 function layoutYear(block, targetHeight){
     const containerWidth = block.photosEl.clientWidth;
@@ -643,9 +656,13 @@ async function buildTimeline(){
 
     let rendered = 0;
 
-    for(const { year, photos } of years){
-        if(photos.length === 0) continue;
+    for(const { year, photos: unorderedPhotos } of years){
+        if(unorderedPhotos.length === 0) continue;
         rendered++;
+
+        const availableNums = unorderedPhotos.map(p => parseInt(p.key.split('-')[1], 10));
+        const order = CropTools.getYearOrder(crops, year, availableNums);
+        const photos = order.map(n => unorderedPhotos.find(p => parseInt(p.key.split('-')[1], 10) === n));
 
         const section = document.createElement('section');
         section.className = 'year';
@@ -671,11 +688,43 @@ async function buildTimeline(){
         const grid = document.createElement('div');
         grid.className = 'photos';
 
+        grid.addEventListener('dragover', e => {
+            if(!CropTools.isEditMode() || !dragSrcEl) return;
+            if(e.target !== grid) return;
+            if(dragSrcEl.parentElement !== grid) return;
+            e.preventDefault();
+            grid.appendChild(dragSrcEl);
+        });
+
         const items = [];
 
         for(const photo of photos){
             const card = document.createElement('div');
             card.className = 'photo';
+            card.draggable = true;
+            card.dataset.num = photo.key.split('-')[1];
+
+            card.addEventListener('dragstart', e => {
+                if(!CropTools.isEditMode()){ e.preventDefault(); return; }
+                dragSrcEl = card;
+                card.classList.add('ct-dragging');
+                e.dataTransfer.effectAllowed = 'move';
+            });
+
+            card.addEventListener('dragend', () => {
+                card.classList.remove('ct-dragging');
+                if(dragSrcEl === card) dragSrcEl = null;
+                finishReorder(grid, year);
+            });
+
+            card.addEventListener('dragover', e => {
+                if(!CropTools.isEditMode() || !dragSrcEl || dragSrcEl === card) return;
+                if(dragSrcEl.parentElement !== card.parentElement) return;
+                e.preventDefault();
+                const rect = card.getBoundingClientRect();
+                const before = (e.clientX - rect.left) < rect.width / 2;
+                grid.insertBefore(dragSrcEl, before ? card : card.nextSibling);
+            });
 
             const img = document.createElement('img');
             img.src = photo.src;

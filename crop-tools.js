@@ -178,6 +178,28 @@ function getYearPhotoNumber(crops, year){
     return (crops._yearPhoto && crops._yearPhoto[year]) || 1;
 }
 
+function getYearOrder(crops, year, availableNums){
+    const stored = (crops._yearOrder && crops._yearOrder[String(year)]) || [];
+    const validStored = stored.filter(n => availableNums.includes(n));
+    const missing = availableNums.filter(n => !validStored.includes(n)).sort((a, b) => a - b);
+    return validStored.concat(missing);
+}
+
+async function setYearOrder(year, order){
+    const crops = await loadCrops();
+    const natural = order.slice().sort((a, b) => a - b);
+    const isNatural = order.every((v, i) => v === natural[i]);
+
+    if(!crops._yearOrder) crops._yearOrder = {};
+    if(isNatural){
+        delete crops._yearOrder[String(year)];
+        if(Object.keys(crops._yearOrder).length === 0) delete crops._yearOrder;
+    } else {
+        crops._yearOrder[String(year)] = order;
+    }
+    markDirty(`_yearOrder:${year}`);
+}
+
 // ---------------------------------------------------------------------
 // Injected UI: styles + markup
 // ---------------------------------------------------------------------
@@ -213,6 +235,14 @@ body.ct-edit-mode .photo-box.has-photo{
     outline:2px dashed var(--muted);
     outline-offset:2px;
     cursor:crosshair;
+}
+
+body.ct-edit-mode .photo{
+    cursor:grab;
+}
+
+.ct-dragging{
+    opacity:.35;
 }
 
 body.ct-modal-active .theme-toggle,
@@ -783,6 +813,8 @@ window.CropTools = {
     loadCrops,
     applyCrop,
     getYearPhotoNumber,
+    getYearOrder,
+    setYearOrder,
     isEditMode: () => editMode,
     onSaved: cb => { onSavedCallback = cb; },
     openEditor
