@@ -80,7 +80,12 @@ header{
     text-align:center;
     padding:60px 20px 28px;
 
-    transition:background-color .3s ease;
+    transition:background-color .3s ease, padding .25s ease;
+}
+
+header.compact{
+
+    padding:16px 20px 12px;
 }
 
 header h1{
@@ -90,6 +95,14 @@ header h1{
     font-weight:400;
     letter-spacing:6px;
     color:var(--heading);
+
+    transition:font-size .25s ease, letter-spacing .25s ease;
+}
+
+header.compact h1{
+
+    font-size:30px;
+    letter-spacing:3px;
 }
 
 header h2{
@@ -99,17 +112,40 @@ header h2{
     letter-spacing:5px;
     color:var(--muted);
     font-weight:300;
+
+    transition:font-size .25s ease, margin-top .25s ease;
+}
+
+header.compact h2{
+
+    margin-top:4px;
+    font-size:12px;
 }
 
 header p{
 
     margin-top:30px;
     color:var(--muted);
+
+    transition:font-size .25s ease, margin-top .25s ease;
+}
+
+header.compact p{
+
+    margin-top:4px;
+    font-size:11px;
 }
 
 .view-switch{
 
     margin-bottom:20px;
+
+    transition:margin-bottom .25s ease;
+}
+
+header.compact .view-switch{
+
+    margin-bottom:8px;
 }
 
 .view-switch a{
@@ -299,24 +335,34 @@ header p{
     align-items:center;
 }
 
-.lightbox-content img{
+.lightbox-frame{
+
+    position:relative;
+    max-width:90vw;
+    max-height:85vh;
+    overflow:hidden;
+
+    border-radius:8px;
+    box-shadow:0 25px 60px rgba(0,0,0,.5);
+
+    display:flex;
+    align-items:center;
+    justify-content:center;
+}
+
+.lightbox-frame img{
 
     display:block;
     max-width:90vw;
     max-height:85vh;
-    border-radius:8px;
-    box-shadow:0 25px 60px rgba(0,0,0,.5);
 }
 
-.lightbox-close{
+.lightbox-close,
+.lightbox-nav{
 
     position:fixed;
-    top:24px;
-    right:24px;
     z-index:310;
 
-    width:44px;
-    height:44px;
     border:none;
     border-radius:50%;
 
@@ -326,16 +372,43 @@ header p{
 
     background:rgba(255,255,255,.15);
     color:#fff;
-    font-size:24px;
     line-height:1;
     cursor:pointer;
 
-    transition:background-color .2s ease;
+    transition:background-color .2s ease, opacity .2s ease;
 }
 
-.lightbox-close:hover{
+.lightbox-close{
+
+    top:24px;
+    right:24px;
+    width:44px;
+    height:44px;
+    font-size:24px;
+}
+
+.lightbox-nav{
+
+    top:50%;
+    transform:translateY(-50%);
+    width:48px;
+    height:48px;
+    font-size:18px;
+}
+
+.lightbox-prev{ left:24px; }
+.lightbox-next{ right:24px; }
+
+.lightbox-close:hover,
+.lightbox-nav:hover{
 
     background:rgba(255,255,255,.3);
+}
+
+.lightbox-nav:disabled{
+
+    opacity:0;
+    pointer-events:none;
 }
 
 body.lightbox-active .theme-toggle,
@@ -367,6 +440,11 @@ header h1{
     font-size:48px;
 }
 
+header.compact h1{
+
+    font-size:24px;
+}
+
 .theme-toggle{
 
     top:14px;
@@ -393,6 +471,16 @@ header h1{
     top:14px;
     right:14px;
 }
+
+.lightbox-nav{
+
+    width:38px;
+    height:38px;
+    font-size:15px;
+}
+
+.lightbox-prev{ left:10px; }
+.lightbox-next{ right:10px; }
 
 }
 
@@ -433,8 +521,12 @@ header h1{
 
 <div class="lightbox" id="lightbox">
 <button class="lightbox-close" id="lightboxClose" aria-label="Close">&times;</button>
+<button class="lightbox-nav lightbox-prev" id="lightboxPrev" aria-label="Previous photo">&#10094;</button>
+<button class="lightbox-nav lightbox-next" id="lightboxNext" aria-label="Next photo">&#10095;</button>
 <div class="lightbox-content">
+<div class="lightbox-frame" id="lightboxFrame">
 <img id="lightboxImg" src="" alt="">
+</div>
 </div>
 </div>
 
@@ -453,11 +545,13 @@ function checkImage(src){
 }
 
 let cropTargets = [];
+const lightboxSequence = [];
 
 async function buildGrid(){
     const grid = document.getElementById('yearGrid');
     grid.innerHTML = '';
     cropTargets = [];
+    lightboxSequence.length = 0;
 
     const crops = await CropTools.loadCrops();
 
@@ -487,13 +581,15 @@ async function buildGrid(){
         if(ok){
             box.classList.add('has-photo');
             const key = `${year}-${num}`;
+            const lightboxIndex = lightboxSequence.length;
+            lightboxSequence.push({ key, src, alt: `${year}` });
             img = document.createElement('img');
             img.src = src;
             img.loading = 'lazy';
             img.alt = `${year}`;
             img.addEventListener('click', () => {
                 if(CropTools.isEditMode()) CropTools.openEditor(key, src, year);
-                else openLightbox(src, `${year}`);
+                else openLightboxAt(lightboxIndex);
             });
             box.appendChild(img);
             cropRect = crops[key] && crops[key].grid;
@@ -547,6 +643,19 @@ window.addEventListener('resize', () => {
     requestAnimationFrame(reapplyCrops);
 });
 
+let headerCompact = false;
+
+function updateHeaderScroll(){
+    const header = document.querySelector('header');
+    const y = window.scrollY;
+    if(!headerCompact && y > 40) headerCompact = true;
+    else if(headerCompact && y < 10) headerCompact = false;
+    header.classList.toggle('compact', headerCompact);
+}
+
+window.addEventListener('scroll', updateHeaderScroll, { passive: true });
+updateHeaderScroll();
+
 const themeToggle = document.getElementById('themeToggle');
 
 function applyTheme(theme){
@@ -564,15 +673,53 @@ themeToggle.addEventListener('click', () => {
 });
 
 const lightbox = document.getElementById('lightbox');
+const lightboxFrame = document.getElementById('lightboxFrame');
 const lightboxImg = document.getElementById('lightboxImg');
 const lightboxClose = document.getElementById('lightboxClose');
+const lightboxPrev = document.getElementById('lightboxPrev');
+const lightboxNext = document.getElementById('lightboxNext');
 
-function openLightbox(src, alt){
-    lightboxImg.src = src;
-    lightboxImg.alt = alt || '';
+let currentLightboxIndex = -1;
+
+function resetLightboxFrame(){
+    lightboxFrame.style.width = '';
+    lightboxFrame.style.height = '';
+    lightboxImg.style.position = '';
+    lightboxImg.style.width = '';
+    lightboxImg.style.height = '';
+    lightboxImg.style.left = '';
+    lightboxImg.style.top = '';
+    lightboxImg.style.maxWidth = '';
+}
+
+async function openLightboxAt(index){
+    if(index < 0 || index >= lightboxSequence.length) return;
+    currentLightboxIndex = index;
+    const entry = lightboxSequence[index];
+
+    resetLightboxFrame();
+    lightboxImg.src = entry.src;
+    lightboxImg.alt = entry.alt || '';
+
+    lightboxPrev.disabled = index === 0;
+    lightboxNext.disabled = index === lightboxSequence.length - 1;
+
+    // Must be visible (display:flex, not display:none) before applyCropFit
+    // runs, since it reads clientWidth/clientHeight off the frame - those
+    // are 0 on a display:none element regardless of any inline size set.
     lightbox.classList.add('open');
     document.body.classList.add('lightbox-active');
     document.body.style.overflow = 'hidden';
+
+    const crops = await CropTools.loadCrops();
+    const cropRect = crops[entry.key] && crops[entry.key].grid;
+    if(cropRect){
+        const fit = () => {
+            CropTools.applyCropFit(lightboxImg, lightboxFrame, cropRect, window.innerWidth * 0.9, window.innerHeight * 0.85);
+        };
+        if(lightboxImg.complete && lightboxImg.naturalWidth) fit();
+        else lightboxImg.addEventListener('load', fit, { once: true });
+    }
 }
 
 function closeLightbox(){
@@ -582,6 +729,8 @@ function closeLightbox(){
 }
 
 lightboxClose.addEventListener('click', closeLightbox);
+lightboxPrev.addEventListener('click', () => openLightboxAt(currentLightboxIndex - 1));
+lightboxNext.addEventListener('click', () => openLightboxAt(currentLightboxIndex + 1));
 
 lightbox.addEventListener('click', e => {
     if(e.target === lightbox) closeLightbox();
@@ -589,6 +738,13 @@ lightbox.addEventListener('click', e => {
 
 document.addEventListener('keydown', e => {
     if(e.key === 'Escape') closeLightbox();
+    if(!lightbox.classList.contains('open')) return;
+    if(e.key === 'ArrowLeft') openLightboxAt(currentLightboxIndex - 1);
+    else if(e.key === 'ArrowRight') openLightboxAt(currentLightboxIndex + 1);
+});
+
+window.addEventListener('resize', () => {
+    if(lightbox.classList.contains('open')) openLightboxAt(currentLightboxIndex);
 });
 
 </script>

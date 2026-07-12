@@ -178,6 +178,28 @@ function getYearPhotoNumber(crops, year){
     return (crops._yearPhoto && crops._yearPhoto[year]) || 1;
 }
 
+// Sizes wrapperEl to the largest box of the crop's aspect ratio that fits
+// within maxW x maxH (a "contain" fit), then positions the image inside it
+// via applyCrop. Used by the lightbox, where the target box isn't fixed
+// ahead of time the way a grid cell or timeline row is.
+function applyCropFit(imgEl, wrapperEl, crop, maxW, maxH){
+    const nw = imgEl.naturalWidth, nh = imgEl.naturalHeight;
+    if(!nw || !nh) return false;
+
+    const cropPxW = crop.w * nw;
+    const cropPxH = crop.h * nh;
+    if(cropPxW <= 0 || cropPxH <= 0) return false;
+
+    const cropAspect = cropPxW / cropPxH;
+    let w = maxW, h = w / cropAspect;
+    if(h > maxH){ h = maxH; w = h * cropAspect; }
+
+    wrapperEl.style.width = w + 'px';
+    wrapperEl.style.height = h + 'px';
+
+    return applyCrop(imgEl, wrapperEl, crop);
+}
+
 function getYearOrder(crops, year, availableNums){
     const stored = (crops._yearOrder && crops._yearOrder[String(year)]) || [];
     const validStored = stored.filter(n => availableNums.includes(n));
@@ -812,6 +834,7 @@ window.CropTools = {
     init,
     loadCrops,
     applyCrop,
+    applyCropFit,
     getYearPhotoNumber,
     getYearOrder,
     setYearOrder,
