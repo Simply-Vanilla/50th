@@ -19,6 +19,10 @@ let sameForBoth = true;
 let squareLock = false;
 let activeTab = 'grid';
 let cropData = { grid: null, timeline: null };
+let adjust = { brightness: 100, contrast: 100, saturation: 100, rotate: 0 };
+let originalSrc = null;
+let originalImgEl = null;
+let rotateBakeTimer = null;
 
 // ---------------------------------------------------------------------
 // Data loading / local batching / publishing
@@ -150,6 +154,33 @@ async function deleteFileFromGitHub(path, sha, message){
             'Content-Type': 'application/json'
         },
         body: JSON.stringify({ message, sha, branch: GITHUB_BRANCH })
+    });
+
+    if(!res.ok){
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || `GitHub API error (${res.status})`);
+    }
+
+    return res.json();
+}
+
+async function uploadPhotoBytes(path, base64Content, message){
+    const token = getToken();
+    if(!token) throw new Error('No GitHub token set.');
+
+    const sha = await fetchFileSha(path);
+    const url = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/contents/${path}`;
+    const body = { message, content: base64Content, branch: GITHUB_BRANCH };
+    if(sha) body.sha = sha;
+
+    const res = await fetch(url, {
+        method: 'PUT',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/vnd.github+json',
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
     });
 
     if(!res.ok){
@@ -420,6 +451,7 @@ body.ct-modal-active .ct-edit-toggle{
 }
 
 .ct-cropper-wrap{
+    --ct-filter:none;
     max-height:55vh;
     margin-bottom:16px;
     background:#000;
@@ -430,6 +462,48 @@ body.ct-modal-active .ct-edit-toggle{
 .ct-cropper-wrap img{
     display:block;
     max-width:100%;
+}
+
+.ct-cropper-wrap .cropper-canvas img,
+.ct-cropper-wrap .cropper-view-box img{
+    filter:var(--ct-filter);
+}
+
+.ct-adjust{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    margin-bottom:16px;
+}
+
+.ct-adjust-row{
+    display:grid;
+    grid-template-columns:88px 1fr 44px;
+    align-items:center;
+    gap:10px;
+    font-size:12px;
+    color:var(--muted);
+}
+
+.ct-adjust-row input[type=range]{
+    width:100%;
+    accent-color:#c9a227;
+}
+
+.ct-adjust-val{
+    text-align:right;
+    font-variant-numeric:tabular-nums;
+}
+
+.ct-adjust-reset{
+    align-self:flex-end;
+    background:none;
+    border:none;
+    color:var(--muted);
+    font-size:11px;
+    text-decoration:underline;
+    cursor:pointer;
+    padding:0;
 }
 
 .ct-actions{
@@ -588,6 +662,30 @@ function injectMarkup(){
       <img id="ctImage" src="" alt="">
     </div>
 
+    <div class="ct-adjust">
+      <label class="ct-adjust-row">
+        <span>Brightness</span>
+        <input type="range" id="ctBrightness" min="50" max="150" value="100">
+        <span class="ct-adjust-val" id="ctBrightnessVal">100%</span>
+      </label>
+      <label class="ct-adjust-row">
+        <span>Contrast</span>
+        <input type="range" id="ctContrast" min="50" max="150" value="100">
+        <span class="ct-adjust-val" id="ctContrastVal">100%</span>
+      </label>
+      <label class="ct-adjust-row">
+        <span>Saturation</span>
+        <input type="range" id="ctSaturation" min="0" max="200" value="100">
+        <span class="ct-adjust-val" id="ctSaturationVal">100%</span>
+      </label>
+      <label class="ct-adjust-row">
+        <span>Straighten</span>
+        <input type="range" id="ctRotate" min="-45" max="45" value="0" step="0.5">
+        <span class="ct-adjust-val" id="ctRotateVal">0&deg;</span>
+      </label>
+      <button class="ct-adjust-reset" id="ctAdjustReset" type="button">Reset adjustments</button>
+    </div>
+
     <div class="ct-actions">
       <button class="ct-btn ct-btn-danger" id="ctDeleteBtn" type="button">Delete Photo</button>
       <div class="ct-actions-spacer"></div>
@@ -638,6 +736,96 @@ function isGridPhoto(){
     return document.getElementById('ctGridPhotoToggle').checked;
 }
 
+function defaultAdjust(){
+    return { brightness: 100, contrast: 100, saturation: 100, rotate: 0 };
+}
+
+function isAdjustDefault(a){
+    return a.brightness === 100 && a.contrast === 100 && a.saturation === 100 && Math.abs(a.rotate) < 0.01;
+}
+
+function filterCss(a){
+    return `brightness(${a.brightness}%) contrast(${a.contrast}%) saturate(${a.saturation}%)`;
+}
+
+function rotatedCanvasSize(w, h, deg){
+    const rad = deg * Math.PI / 180;
+    const cos = Math.abs(Math.cos(rad)), sin = Math.abs(Math.sin(rad));
+    return { w: Math.round(w * cos + h * sin), h: Math.round(w * sin + h * cos) };
+}
+
+// Draws imgEl onto an offscreen canvas rotated by a.rotate degrees (enlarging
+// the canvas to fit the rotated bounds, exposed corners filled white), with
+// brightness/contrast/saturation baked in via ctx.filter when includeFilter
+// is true. Used both for the live "straighten" working image (rotate only)
+// and the final full-quality bake uploaded on Save (rotate + filter).
+function bakeCanvas(imgEl, a, includeFilter){
+    const nw = imgEl.naturalWidth, nh = imgEl.naturalHeight;
+    const rad = a.rotate * Math.PI / 180;
+    const size = rotatedCanvasSize(nw, nh, a.rotate);
+    const canvas = document.createElement('canvas');
+    canvas.width = size.w;
+    canvas.height = size.h;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, size.w, size.h);
+    if(includeFilter) ctx.filter = filterCss(a);
+    ctx.translate(size.w / 2, size.h / 2);
+    ctx.rotate(rad);
+    ctx.drawImage(imgEl, -nw / 2, -nh / 2, nw, nh);
+    return canvas;
+}
+
+function updateFilterPreview(){
+    const wrap = document.querySelector('.ct-cropper-wrap');
+    if(wrap) wrap.style.setProperty('--ct-filter', filterCss(adjust));
+}
+
+function syncAdjustSliders(){
+    document.getElementById('ctBrightness').value = adjust.brightness;
+    document.getElementById('ctContrast').value = adjust.contrast;
+    document.getElementById('ctSaturation').value = adjust.saturation;
+    document.getElementById('ctRotate').value = adjust.rotate;
+    document.getElementById('ctBrightnessVal').textContent = adjust.brightness + '%';
+    document.getElementById('ctContrastVal').textContent = adjust.contrast + '%';
+    document.getElementById('ctSaturationVal').textContent = adjust.saturation + '%';
+    document.getElementById('ctRotateVal').textContent = adjust.rotate + '°';
+}
+
+// Rotating changes the image's pixel dimensions (enlarged bounding box), so
+// any in-progress crop selection is invalidated - drop it and let the user
+// re-frame against the new geometry rather than silently misapplying stale
+// coordinates.
+function rebuildGeometry(){
+    const img = document.getElementById('ctImage');
+    if(Math.abs(adjust.rotate) < 0.01){
+        img.onload = () => initCropper();
+        img.src = originalSrc;
+        return;
+    }
+    cropData = { grid: null, timeline: null };
+    const canvas = bakeCanvas(originalImgEl, { ...adjust, brightness: 100, contrast: 100, saturation: 100 }, false);
+    img.onload = () => initCropper({ restoreExisting: false });
+    img.src = canvas.toDataURL('image/png');
+}
+
+function canvasToBase64Jpeg(canvas, quality){
+    return canvas.toDataURL('image/jpeg', quality).split(',')[1];
+}
+
+// Refreshes any on-page <img> already showing this photo so an uploaded
+// pixel adjustment is visible immediately, without waiting on browser cache
+// expiry or a full reload.
+function cacheBustPhoto(key){
+    const suffix = `photos/${key}.jpg`;
+    document.querySelectorAll('img').forEach(img => {
+        const src = img.getAttribute('src') || '';
+        if(src.split('?')[0].endsWith(suffix)){
+            img.src = suffix + '?ct=' + Date.now();
+        }
+    });
+}
+
 function currentAspect(){
     if(!isGridPhoto()) return NaN;
     if(squareLock) return 1;
@@ -667,7 +855,8 @@ function captureIntoCropData(){
     else cropData[activeTab] = rect;
 }
 
-function initCropper(){
+function initCropper(opts){
+    const restoreExisting = !opts || opts.restoreExisting !== false;
     if(cropper){ cropper.destroy(); cropper = null; }
     const img = document.getElementById('ctImage');
     cropper = new Cropper(img, {
@@ -676,6 +865,7 @@ function initCropper(){
         autoCropArea: 0.9,
         background: false,
         ready(){
+            if(!restoreExisting) return;
             let existingRect;
             if(!isGridPhoto()) existingRect = cropData.timeline;
             else existingRect = sameForBoth ? (cropData.grid || cropData.timeline) : cropData[activeTab];
@@ -725,6 +915,11 @@ async function openEditor(key, src, year){
     currentKey = key;
     currentYear = year != null ? String(year) : String(key).split('-')[0];
 
+    adjust = defaultAdjust();
+    originalSrc = src;
+    originalImgEl = new Image();
+    originalImgEl.src = src;
+
     const crops = await loadCrops();
     const existing = crops[key] || {};
     cropData = {
@@ -738,6 +933,8 @@ async function openEditor(key, src, year){
     document.getElementById('ctSquareToggle').checked = false;
     document.getElementById('ctTitle').textContent = `Edit Crop — ${key}`;
     document.getElementById('ctStatus').textContent = '';
+    syncAdjustSliders();
+    updateFilterPreview();
     activeTab = 'grid';
     document.querySelectorAll('.ct-tab').forEach(b => b.classList.toggle('active', b.dataset.target === 'grid'));
 
@@ -764,6 +961,26 @@ function closeEditor(){
 }
 
 async function handleSave(){
+    const statusEl = document.getElementById('ctStatus');
+    const saveBtn = document.getElementById('ctSaveBtn');
+
+    if(!isAdjustDefault(adjust)){
+        if(!getToken()){ openTokenModal(); return; }
+        saveBtn.disabled = true;
+        statusEl.textContent = 'Uploading adjusted photo…';
+        try {
+            const canvas = bakeCanvas(originalImgEl, adjust, true);
+            const base64 = canvasToBase64Jpeg(canvas, 0.92);
+            await uploadPhotoBytes(`photos/${currentKey}.jpg`, base64, `Adjust photo ${currentKey}.jpg`);
+            cacheBustPhoto(currentKey);
+        } catch(e){
+            statusEl.textContent = 'Photo upload failed: ' + e.message;
+            saveBtn.disabled = false;
+            return;
+        }
+        saveBtn.disabled = false;
+    }
+
     const rect = captureCurrentRect();
     if(!rect) return;
 
@@ -938,6 +1155,34 @@ function wireEvents(){
 
     document.querySelectorAll('.ct-tab').forEach(btn => {
         btn.addEventListener('click', () => setActiveTab(btn.dataset.target));
+    });
+
+    document.getElementById('ctBrightness').addEventListener('input', e => {
+        adjust.brightness = parseInt(e.target.value, 10);
+        document.getElementById('ctBrightnessVal').textContent = adjust.brightness + '%';
+        updateFilterPreview();
+    });
+    document.getElementById('ctContrast').addEventListener('input', e => {
+        adjust.contrast = parseInt(e.target.value, 10);
+        document.getElementById('ctContrastVal').textContent = adjust.contrast + '%';
+        updateFilterPreview();
+    });
+    document.getElementById('ctSaturation').addEventListener('input', e => {
+        adjust.saturation = parseInt(e.target.value, 10);
+        document.getElementById('ctSaturationVal').textContent = adjust.saturation + '%';
+        updateFilterPreview();
+    });
+    document.getElementById('ctRotate').addEventListener('input', e => {
+        adjust.rotate = parseFloat(e.target.value);
+        document.getElementById('ctRotateVal').textContent = adjust.rotate + '°';
+        clearTimeout(rotateBakeTimer);
+        rotateBakeTimer = setTimeout(rebuildGeometry, 120);
+    });
+    document.getElementById('ctAdjustReset').addEventListener('click', () => {
+        adjust = defaultAdjust();
+        syncAdjustSliders();
+        updateFilterPreview();
+        rebuildGeometry();
     });
 
     document.getElementById('ctSaveBtn').addEventListener('click', handleSave);
