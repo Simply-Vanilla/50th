@@ -873,12 +873,14 @@ function cacheBustPhoto(key){
 // saved into the "grid" slot must itself be square - otherwise grid.html's
 // cover-fit math and the editor's own aspect-locked Cropper box each
 // reconcile the mismatch differently, and the two visibly disagree. That
-// holds regardless of which tab is active or whether "same for both" is
-// checked, since a same-for-both rect is saved into "grid" too.
+// applies to the dedicated Grid tab, and to "same for both" mode (since
+// that single rect gets saved into "grid" too) - but the independent
+// Timeline tab is free-form, same as a non-grid-designated photo.
 function currentAspect(){
     if(squareLock) return 1;
-    if(isGridPhoto()) return 1;
-    return NaN;
+    if(!isGridPhoto()) return NaN;
+    if(sameForBoth) return 1;
+    return activeTab === 'grid' ? 1 : NaN;
 }
 
 function captureCurrentRect(){
