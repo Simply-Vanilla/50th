@@ -603,13 +603,14 @@ function loadImage(src){
     });
 }
 
-async function findPhotosForYear(year){
+async function findPhotosForYear(year, crops){
     const photos = [];
     for(let n = 1; n <= MAX_PHOTOS_PER_YEAR; n++){
-        const src = `photos/${year}-${n}.jpg`;
+        const key = `${year}-${n}`;
+        const src = CropTools.photoUrl(crops, key);
         const result = await loadImage(src);
         if(!result.ok) break;
-        photos.push({ src, key: `${year}-${n}`, ratio: result.ratio });
+        photos.push({ src, key, ratio: result.ratio });
     }
     return photos;
 }
@@ -755,7 +756,7 @@ async function buildTimeline(){
 
     const yearPromises = [];
     for(let year = START_YEAR; year <= END_YEAR; year++){
-        yearPromises.push(findPhotosForYear(year).then(photos => ({ year, photos })));
+        yearPromises.push(findPhotosForYear(year, crops).then(photos => ({ year, photos })));
     }
     const years = await Promise.all(yearPromises);
 

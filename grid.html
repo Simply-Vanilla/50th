@@ -558,12 +558,13 @@ async function buildGrid(){
     const yearPromises = [];
     for(let year = START_YEAR; year <= END_YEAR; year++){
         const num = CropTools.getYearPhotoNumber(crops, year);
-        const src = `photos/${year}-${num}.jpg`;
-        yearPromises.push(checkImage(src).then(ok => ({ year, src, ok, num })));
+        const key = `${year}-${num}`;
+        const src = CropTools.photoUrl(crops, key);
+        yearPromises.push(checkImage(src).then(ok => ({ year, src, ok, num, key })));
     }
     const years = await Promise.all(yearPromises);
 
-    years.forEach(({ year, src, ok, num }) => {
+    years.forEach(({ year, src, ok, num, key }) => {
         const cell = document.createElement('div');
         cell.className = 'year-cell';
 
@@ -580,7 +581,6 @@ async function buildGrid(){
 
         if(ok){
             box.classList.add('has-photo');
-            const key = `${year}-${num}`;
             const lightboxIndex = lightboxSequence.length;
             lightboxSequence.push({ key, src, alt: `${year}` });
             img = document.createElement('img');
