@@ -865,11 +865,16 @@ function cacheBustPhoto(key){
     });
 }
 
+// Grid View always renders into a square cell, so any crop that will be
+// saved into the "grid" slot must itself be square - otherwise grid.html's
+// cover-fit math and the editor's own aspect-locked Cropper box each
+// reconcile the mismatch differently, and the two visibly disagree. That
+// holds regardless of which tab is active or whether "same for both" is
+// checked, since a same-for-both rect is saved into "grid" too.
 function currentAspect(){
-    if(!isGridPhoto()) return NaN;
     if(squareLock) return 1;
-    if(sameForBoth) return NaN;
-    return activeTab === 'grid' ? 1 : NaN;
+    if(isGridPhoto()) return 1;
+    return NaN;
 }
 
 function captureCurrentRect(){
