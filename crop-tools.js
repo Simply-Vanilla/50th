@@ -246,6 +246,15 @@ function getYearPhotoNumber(crops, year){
     return (crops._yearPhoto && crops._yearPhoto[year]) || 1;
 }
 
+// Builds a photo's URL with a cache-busting version query string when one has
+// been stamped (see handleSave) - without this, editing a photo whose crop
+// key already exists on the page would keep showing the old cached bytes
+// indefinitely, since the filename itself never changes.
+function photoUrl(crops, key){
+    const ver = crops._photoVersion && crops._photoVersion[key];
+    return `photos/${key}.jpg` + (ver ? `?v=${ver}` : '');
+}
+
 // Sizes wrapperEl to the largest box of the crop's aspect ratio that fits
 // within maxW x maxH (a "contain" fit), then positions the image inside it
 // via applyCrop. Used by the lightbox, where the target box isn't fixed
@@ -997,6 +1006,7 @@ function closeEditor(){
 async function handleSave(){
     const statusEl = document.getElementById('ctStatus');
     const saveBtn = document.getElementById('ctSaveBtn');
+    const crops = await loadCrops();
 
     if(!isAdjustDefault(adjust)){
         if(!getToken()){ openTokenModal(); return; }
@@ -1008,6 +1018,16 @@ async function handleSave(){
             const base64 = canvasToBase64Jpeg(canvas, 0.92);
             await uploadPhotoBytes(`photos/${currentKey}.jpg`, base64, `Adjust photo ${currentKey}.jpg`);
             cacheBustPhoto(currentKey);
+
+            // photos/{key}.jpg is a static filename that's reused across edits,
+            // so the browser (and any CDN in front of GitHub Pages) will happily
+            // keep serving a stale cached copy on future page loads unless the
+            // <img> URL itself changes. Stamp a version into crops.json - which
+            // already gets published alongside this edit - so index.html/grid.html
+            // can append it as a cache-busting query string.
+            if(!crops._photoVersion) crops._photoVersion = {};
+            crops._photoVersion[currentKey] = Date.now();
+            markDirty(`_photoVersion:${currentKey}`);
         } catch(e){
             statusEl.textContent = 'Photo upload failed: ' + e.message;
             saveBtn.disabled = false;
@@ -1019,7 +1039,6 @@ async function handleSave(){
     const rect = captureCurrentRect();
     if(!rect) return;
 
-    const crops = await loadCrops();
     const useAsGridPhoto = isGridPhoto();
     const existingEntry = crops[currentKey] || {};
 
@@ -1264,6 +1283,7 @@ window.CropTools = {
     getYearPhotoNumber,
     getYearOrder,
     setYearOrder,
+    photoUrl,
     isEditMode: () => editMode,
     onSaved: cb => { onSavedCallback = cb; },
     openEditor
