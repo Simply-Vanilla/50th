@@ -34,7 +34,11 @@ async function loadCrops(){
 
     let serverCrops = {};
     try {
-        const res = await fetch(CROPS_FILE, { cache: 'no-store' });
+        // `cache: 'no-store'` only stops the browser's own cache from being
+        // used - it does nothing about GitHub Pages' CDN, which caches by
+        // URL independent of that header. A timestamp query string forces a
+        // real cache miss all the way to origin every time.
+        const res = await fetch(`${CROPS_FILE}?t=${Date.now()}`, { cache: 'no-store' });
         serverCrops = res.ok ? await res.json() : {};
     } catch(e){
         serverCrops = {};
