@@ -22,6 +22,7 @@ let cropData = { grid: null, timeline: null };
 let adjust = { brightness: 100, contrast: 100, saturation: 100, rotate: 0 };
 let originalSrc = null;
 let originalImgEl = null;
+let originalImgReady = null;
 let rotateBakeTimer = null;
 
 // ---------------------------------------------------------------------
@@ -754,11 +755,39 @@ function rotatedCanvasSize(w, h, deg){
     return { w: Math.round(w * cos + h * sin), h: Math.round(w * sin + h * cos) };
 }
 
+// Canvas ctx.filter (used for a CSS-filter-based bake) is unreliable across
+// real-world browsers/webviews - some silently no-op it rather than erroring,
+// which would produce a "successful" save with unchanged pixels. Applying
+// brightness/contrast/saturation as plain per-pixel math via
+// getImageData/putImageData works everywhere Canvas 2D does.
+function applyAdjustPixels(ctx, w, h, a){
+    if(a.brightness === 100 && a.contrast === 100 && a.saturation === 100) return;
+    const imgData = ctx.getImageData(0, 0, w, h);
+    const d = imgData.data;
+    const bf = a.brightness / 100;
+    const cf = a.contrast / 100;
+    const sf = a.saturation / 100;
+    for(let i = 0; i < d.length; i += 4){
+        let r = d[i] * bf, g = d[i + 1] * bf, b = d[i + 2] * bf;
+        r = (r - 128) * cf + 128;
+        g = (g - 128) * cf + 128;
+        b = (b - 128) * cf + 128;
+        const gray = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        r = gray + (r - gray) * sf;
+        g = gray + (g - gray) * sf;
+        b = gray + (b - gray) * sf;
+        d[i] = Math.max(0, Math.min(255, r));
+        d[i + 1] = Math.max(0, Math.min(255, g));
+        d[i + 2] = Math.max(0, Math.min(255, b));
+    }
+    ctx.putImageData(imgData, 0, 0);
+}
+
 // Draws imgEl onto an offscreen canvas rotated by a.rotate degrees (enlarging
 // the canvas to fit the rotated bounds, exposed corners filled white), with
-// brightness/contrast/saturation baked in via ctx.filter when includeFilter
-// is true. Used both for the live "straighten" working image (rotate only)
-// and the final full-quality bake uploaded on Save (rotate + filter).
+// brightness/contrast/saturation baked in via applyAdjustPixels when
+// includeFilter is true. Used both for the live "straighten" working image
+// (rotate only) and the final full-quality bake uploaded on Save.
 function bakeCanvas(imgEl, a, includeFilter){
     const nw = imgEl.naturalWidth, nh = imgEl.naturalHeight;
     const rad = a.rotate * Math.PI / 180;
@@ -769,10 +798,10 @@ function bakeCanvas(imgEl, a, includeFilter){
     const ctx = canvas.getContext('2d');
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, size.w, size.h);
-    if(includeFilter) ctx.filter = filterCss(a);
     ctx.translate(size.w / 2, size.h / 2);
     ctx.rotate(rad);
     ctx.drawImage(imgEl, -nw / 2, -nh / 2, nw, nh);
+    if(includeFilter) applyAdjustPixels(ctx, size.w, size.h, a);
     return canvas;
 }
 
@@ -796,13 +825,14 @@ function syncAdjustSliders(){
 // any in-progress crop selection is invalidated - drop it and let the user
 // re-frame against the new geometry rather than silently misapplying stale
 // coordinates.
-function rebuildGeometry(){
+async function rebuildGeometry(){
     const img = document.getElementById('ctImage');
     if(Math.abs(adjust.rotate) < 0.01){
         img.onload = () => initCropper();
         img.src = originalSrc;
         return;
     }
+    await originalImgReady;
     cropData = { grid: null, timeline: null };
     const canvas = bakeCanvas(originalImgEl, { ...adjust, brightness: 100, contrast: 100, saturation: 100 }, false);
     img.onload = () => initCropper({ restoreExisting: false });
@@ -918,6 +948,10 @@ async function openEditor(key, src, year){
     adjust = defaultAdjust();
     originalSrc = src;
     originalImgEl = new Image();
+    originalImgReady = new Promise(resolve => {
+        originalImgEl.onload = resolve;
+        originalImgEl.onerror = resolve;
+    });
     originalImgEl.src = src;
 
     const crops = await loadCrops();
@@ -969,6 +1003,7 @@ async function handleSave(){
         saveBtn.disabled = true;
         statusEl.textContent = 'Uploading adjusted photo…';
         try {
+            await originalImgReady;
             const canvas = bakeCanvas(originalImgEl, adjust, true);
             const base64 = canvasToBase64Jpeg(canvas, 0.92);
             await uploadPhotoBytes(`photos/${currentKey}.jpg`, base64, `Adjust photo ${currentKey}.jpg`);
