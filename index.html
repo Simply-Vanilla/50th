@@ -603,13 +603,27 @@ function loadImage(src){
     });
 }
 
+// Deleting a photo leaves a gap in its year's numbering (e.g. 1990-2 gone
+// but 1990-3 still there), so stopping at the first miss would silently
+// drop every later photo in that year too. Tolerate a run of consecutive
+// misses before concluding there's really nothing more, instead of bailing
+// on the very first one - scanning all MAX_PHOTOS_PER_YEAR slots
+// unconditionally for every year would be needlessly expensive.
+const GAP_TOLERANCE = 5;
+
 async function findPhotosForYear(year, crops){
     const photos = [];
+    let consecutiveMisses = 0;
     for(let n = 1; n <= MAX_PHOTOS_PER_YEAR; n++){
         const key = `${year}-${n}`;
         const src = CropTools.photoUrl(crops, key);
         const result = await loadImage(src);
-        if(!result.ok) break;
+        if(!result.ok){
+            consecutiveMisses++;
+            if(consecutiveMisses >= GAP_TOLERANCE) break;
+            continue;
+        }
+        consecutiveMisses = 0;
         photos.push({ src, key, ratio: result.ratio });
     }
     return photos;
