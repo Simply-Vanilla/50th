@@ -1131,7 +1131,18 @@ async function handleDelete(){
             delete crops._yearPhoto[currentYear];
             if(Object.keys(crops._yearPhoto).length === 0) delete crops._yearPhoto;
         }
+
+        // Deleting the file doesn't change its URL, so a browser (or GitHub
+        // Pages' CDN) that already cached a 200 for photos/{key}.jpg would
+        // keep serving those bytes indefinitely - the page would look like
+        // the photo never left. Bumping the version stamp forces every
+        // future existence probe of this URL to be a genuine cache miss, so
+        // it actually gets the real (404) answer from origin.
+        if(!crops._photoVersion) crops._photoVersion = {};
+        crops._photoVersion[currentKey] = Date.now();
+
         markDirty(currentKey);
+        markDirty(`_photoVersion:${currentKey}`);
         await publishChanges();
 
         statusEl.textContent = 'Deleted ✓';
