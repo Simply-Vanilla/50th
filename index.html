@@ -23,7 +23,11 @@
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"></script>
-<script src="crop-tools.js"></script>
+<!-- Bump the ?v= below whenever crop-tools.js changes - browsers (Safari
+     especially) can hold a stale cached copy of this script well past any
+     server-side cache TTL, which silently disables whatever fix just
+     shipped. A changed URL forces a real fetch. -->
+<script src="crop-tools.js?v=20260718"></script>
 
 <style>
 
